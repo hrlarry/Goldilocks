@@ -257,13 +257,13 @@ trace.showAll <- function(conflictVector, numConflicts, thresholdParam, tensionL
 }
 
 #save all iterations into individual GIFs
-ani.options(convert="C:/Program Files/ImageMagick-6.9.2-Q16/convert.exe")
-  for(i in -3:3){
-    thresh = maxGoodThreshold + i
-    saveGIF(trace.animate(intensities, numConflicts, thresh, tensionLimit), interval = .05, movie.name=paste("trace", toString(thresh), "_noNitpick.gif", sep=""))
-  }
-
-  # Cycle through all 7 graphs in their final form.
-    saveGIF(trace.showAll(intensities, numConflicts, thresh, tensionLimit), interval = 1, movie.name=paste("trace_no_nitpick_with_colors.gif", sep=""))
+# ani.options(convert="C:/Program Files/ImageMagick-6.9.2-Q16/convert.exe")
+#   for(i in -3:3){
+#     thresh = maxGoodThreshold + i
+#     saveGIF(trace.animate(intensities, numConflicts, thresh, tensionLimit), interval = .05, movie.name=paste("trace", toString(thresh), "_noNitpick.gif", sep=""))
+#   }
+# 
+#   # Cycle through all 7 graphs in their final form.
+#     saveGIF(trace.showAll(intensities, numConflicts, thresh, tensionLimit), interval = 1, movie.name=paste("trace_no_nitpick_with_colors.gif", sep=""))
 
 ```
