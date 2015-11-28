@@ -1,0 +1,269 @@
+---
+title: "Relationships Goldilocks Zone, Appendix"
+author: "Larry Liu | www.mandatoryliposuction.com | www.hrlarry.com | hrlarry@stanford.edu"
+date: "November 27, 2015"
+output: html_document
+---
+
+Notes:
+
+This appendix is meant to supplement the post on the Relationships Goldilocks Zone on my blog at www.mandatoryliposuction.com.
+
+If you're running any of the code locally, you'll need to have the ggplot2 library installed. If you want to create your own version of the GIFs seen in the blog post, you need to install ImageMagick and change the pathname in the final R block, as well as install the animation library.
+
+---
+
+To get an understanding of how the activation discomfort works, here's an illustration simulating two relationship conflicts, one that is below the negativity threshold and one that is above.
+
+The first conflict has intensity 20, and the negativity threshold is 25. So, the relationship experiences escalated tension when it happens, and the conflict is not talked about and resolved:
+
+```{r, echo=FALSE}
+library('ggplot2')
+library('animation')
+```
+```{r}
+negThreshold = 25 # Negativity threshold
+netHealth = .20 # Cumulative relationship tension decreases by 20% of conflict intensity
+
+isolatedConflict = negThreshold - 5 # Conflict intensity below negativity threshold
+```
+```{r, echo=FALSE}
+cumulativeTension = c(0)
+timeRange = seq(1, 2, by=.5)
+
+conflictOnly = append(cumulativeTension, c(isolatedConflict, isolatedConflict))
+
+df = data.frame(timeRange, conflictOnly)
+colnames(df) = c("Time", "cumulativeTension")
+
+g1 = ggplot(data=df, aes(x=Time, y=cumulativeTension)) + geom_line(color="red") + geom_point() + theme(legend.position="none", panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(title="Relationship Tension Over Time", x="Conflict Number", y="Cumulative Relationship Tension") + scale_x_continuous(breaks=seq(1,10,1), limits=c(1,10)) + scale_y_continuous(breaks=seq(0,100,20), limits=c(0,100))
+
+g1
+
+```
+
+The second conflict has intensity 30. First, the conflict occurs:
+
+```{r}
+isolatedConflict2 = negThreshold + 5 # Conflict intensity above negativity threshold
+```
+```{r, echo=FALSE}
+conflictOnly = append(conflictOnly, isolatedConflict2 + conflictOnly[length(conflictOnly)])
+timeRange = seq(1, 2.5, by=.5)
+
+df = data.frame(timeRange, conflictOnly, c("black", "black", "black", "red"))
+colnames(df) = c("Time", "cumulativeTension", "color")
+df = rbind(df, c(2.0, 20, "red"))
+df$Time = as.numeric(df$Time)
+df$cumulativeTension = as.numeric(df$cumulativeTension)
+
+g2 = ggplot(df, aes(x=Time, y=cumulativeTension, colour=color)) + geom_line(aes(group=color)) + geom_point(color="black") + theme(legend.position="none", panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(title="Relationship Tension Over Time", x="Conflict Number", y="Cumulative Relationship Tension") + scale_x_continuous(breaks=seq(1,10,1), limits=c(1,10)) + scale_y_continuous(breaks=seq(0,100,20), limits=c(0,100)) + scale_color_manual(values=c("black", "red"))
+
+g2
+```
+
+But, because the intensity of this second conflict exceeds the negativity threshold of 25, it gets talked about, and the relationship gets a net increase of 20%, or 6 tension units.
+
+```{r, echo=FALSE}
+levels(df$color) = c(levels(df$color), "green")
+df = rbind(df, c(2.5, 50, "green"), c(3.0, 14,"green"))
+df$Time = as.numeric(df$Time)
+df$cumulativeTension = as.numeric(df$cumulativeTension)
+
+g3 = ggplot(df, aes(x=Time, y=cumulativeTension, colour=color)) + geom_line(aes(group=color)) + geom_point(color="black") + theme(legend.position="none", panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(title="Relationship Tension Over Time", x="Conflict Number", y="Cumulative Relationship Tension") + scale_x_continuous(breaks=seq(1,10,1), limits=c(1,10)) + scale_y_continuous(breaks=seq(0,100,20), limits=c(0,100)) + scale_color_manual(values=c("black", "red", "green"))
+
+g3
+```
+
+Now that we see how each individual relationship conflict can affect cumulative relationship tension, lets simulate an actual relationship!
+
+---
+
+Here are the first 10 elements of a vector of numbers that represents a sequence of relationship conflicts' intensities. The intensities were generated sampling from an exponential distribution and then scaling the sample to span the range 1 to 100.
+
+```{r}
+numConflicts = 1000 # Number of conflicts to simulate
+decayRate = .30 # Decay rate of exponential distribution
+tensionLimit = 250 # Cumulative relationship tension limit
+netHealth = .20 # Cumulative relationship tension decreases by 20% of conflict intensity
+negThreshold = 10 # Negativity threshold
+
+intensities = rexp(numConflicts, decayRate) # Sample from exponential distribution
+
+scaleFactor = 99 / max(intensities) # Determine scale factor for sample to span 0 to 99
+
+intensities = floor(intensities * scaleFactor) + 1 # Scale all samples to 1 to 100
+```
+```{r, echo=FALSE}
+print(head(intensities, 10))
+print(summary(intensities))
+```
+
+To get a sense of what the distribution of samples look like, we can look at the frequency distribution of our samples.
+
+```{r, echo=FALSE}
+hist(intensities, freq=TRUE, breaks = numConflicts)
+```
+
+Alternatively, we can look at the conflicts in sorted order.
+
+```{r, echo=FALSE}
+plot(sort(intensities), main = "Intensities", xlab = "Conflict number", ylab = "Intensities")
+```
+
+We now simulate how relationship tension changes over time in response to relationship conflicts given a particular negativity threshold.
+
+How do we pick such a negativity threshold? A "good" negativity threshold does not diverge, i.e. has an expected net impact on relationship tension less than 0. We bootstrap from our sample, treating it as a full population even if its properties may not be consistent with the distribution we generated the sample from.
+
+```{r}
+expectedImpact <- function(conflictVector, threshold, netHealth){
+  impactVector = ifelse(conflictVector>=threshold, floor(conflictVector*-1*netHealth), conflictVector)
+  return (mean(impactVector))
+}
+
+possibleThresholds = c(1:100)
+expectedImpactVector = c()
+for(i in possibleThresholds){
+  currExpectedImpact = expectedImpact(intensities, i, netHealth)
+  if(currExpectedImpact < 0)
+  expectedImpactVector = append(expectedImpactVector, currExpectedImpact)
+}
+
+maxGoodThreshold = length(expectedImpactVector)
+print(paste("The highest negativity threshold that still converges is around", toString(maxGoodThreshold)))
+```
+
+We generate the cumulative relationship health graphs given negativity thresholds near the best negativity threshold.
+
+
+```{r, echo=FALSE}
+buildCumulativeVector <- function(conflictVector, conflictCount, threshold, nitpick = FALSE){
+  initialTension = 0 # Start with no relationship tension
+  
+  cumulativeVector = c(initialTension)
+  currTension = initialTension
+  
+  for(i in 1:conflictCount){
+    currConflict = conflictVector[i]
+    
+    currTension = currTension + currConflict
+    conflictResult = c()
+    
+    if(currConflict >= threshold){
+      # Conflict intensity exceeds negativity threshold
+      if(!nitpick){
+        netResult = max(floor(currTension - currConflict * (1 + netHealth)), 0) # Can't go below 0
+      }
+      else{
+        netResult = floor(currTension - currConflict * (1 + netHealth))
+      }
+      conflictResult = c(currTension, netResult)
+      currTension = netResult
+    }
+    else{
+      conflictResult = c(currTension, currTension)
+    }
+    
+    cumulativeVector = append(cumulativeVector, conflictResult)
+  }
+  
+  return (cumulativeVector)
+}
+
+plotCumulativeVector <- function(conflictVector, numConflicts, thresholdParam, tensionLimit=250){
+  # Commented code functions without ggplot
+  # plot(buildCumulativeVector(conflictVector, numConflicts, threshold=thresholdParam), main = paste("Relationship Tension for Negativity Threshold = ", toString(thresholdParam), sep=""), xlab = "Conflict number", ylab = "Cumulative Relationship Tension")
+  
+  #########################################  
+  # Without nitpickiness
+  #########################################
+  
+  cumulativeVector = buildCumulativeVector(conflictVector, numConflicts, threshold=thresholdParam, FALSE) # Nitpick = FALSE
+  xIndices = seq(1, numConflicts+1, by=.5)
+  df2 = data.frame(xIndices, cumulativeVector)
+  colnames(df2) = c("Conflict", "Tension")
+  
+ 
+  gCumulative = ggplot(df2, aes(x=Conflict, y=Tension)) + geom_point() + labs(title = paste("Relationship Tension for Negativity Threshold = ", toString(thresholdParam), sep=""), x="Conflict Number", y="Cumulative Relationship Tension") + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + scale_x_continuous(breaks=seq(0,numConflicts,100), limits=c(1,numConflicts+1)) + scale_y_continuous(breaks=seq(0,1000,100), limits=c(-40,1000)) + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=-10,ymax=tensionLimit), fill="green", alpha="0.3") + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=tensionLimit,ymax=1000), fill="red", alpha="0.3") + geom_text(aes(x=numConflicts-60, y=tensionLimit-40, label="Healthy"), size=4) + geom_text(aes(x=numConflicts-70, y=960, label="Too docile"), size=4) + geom_text(aes(x=numConflicts-175, y=-40, label="(c) Mandatory Liposuction"), size=4)
+  
+  print(gCumulative)
+  
+  #########################################
+  # With nitpickiness
+  #########################################
+  
+#   cumulativeVector = buildCumulativeVector(conflictVector, numConflicts, threshold=thresholdParam, TRUE) # Nitpick = TRUE
+#   xIndices = seq(1, numConflicts+1, by=.5)
+#   df2 = data.frame(xIndices, cumulativeVector)
+#   colnames(df2) = c("Conflict", "Tension")
+#   
+#   gCumulative = ggplot(df2, aes(x=Conflict, y=Tension)) + geom_point() + labs(title = paste("Relationship Tension w/ Nitpickiness for Negativity Threshold = ", toString(thresholdParam), sep=""), x="Conflict Number", y="Cumulative Relationship Tension") + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + scale_x_continuous(breaks=seq(0,numConflicts,100), limits=c(1,numConflicts+1)) + scale_y_continuous(breaks=seq(-1000,1000,200), limits=c(-1000,1000)) + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=-tensionLimit,ymax=tensionLimit), fill="green", alpha="0.3") + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=-1000,ymax=-tensionLimit), fill="blue", alpha="0.3") + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=tensionLimit,ymax=1000), fill="red", alpha="0.3") + geom_text(aes(x=numConflicts-60, y=tensionLimit-60, label="Healthy"), size=4) + geom_text(aes(x=numConflicts-70, y=940, label="Too docile"), size=4) + geom_text(aes(x=numConflicts-80, y=-tensionLimit-60, label="Too nitpicky"), size=4) + geom_text(aes(x=numConflicts-175, y=-940, label="(c) Mandatory Liposuction"), size=4)
+# 
+#   
+#   print(gCumulative)
+}
+
+  for(i in -3:3){
+    thresh = maxGoodThreshold + i
+    plotCumulativeVector(intensities, numConflicts, thresh, tensionLimit)  
+  }
+
+```
+
+```{r, echo=FALSE}
+#Used for animation, courtesy of Slawa Rokicki, http://www.r-bloggers.com/animations-and-gifs-using-ggplot2/
+draw.curve<-function(cutoff, conflictVector, numConflicts, thresholdParam, tensionLimit){
+  ##########################
+  # No nitpickiness
+  ##########################
+  
+  cumulativeVector = buildCumulativeVector(conflictVector, numConflicts, threshold=thresholdParam, nitpick=FALSE)
+  xIndices = seq(1, numConflicts+1, by=.5)
+  df2 = data.frame(xIndices, cumulativeVector)
+  colnames(df2) = c("Conflict", "Tension")
+  
+  
+  a<- ggplot(df2, aes(x=Conflict, y=Tension)) + geom_point(data=df2[df2$Conflict<cutoff,]) + labs(title = paste("Relationship Tension for Negativity Threshold = ", toString(thresholdParam), sep=""), x="Conflict Number", y="Cumulative Relationship Tension") + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + scale_x_continuous(breaks=seq(0,numConflicts,100), limits=c(1,numConflicts+1)) + scale_y_continuous(breaks=seq(0,1000,100), limits=c(-40,1000)) + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=-10,ymax=tensionLimit), fill="green", alpha="0.3") + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=tensionLimit,ymax=1000), fill="red", alpha="0.3") + geom_text(aes(x=numConflicts-60, y=tensionLimit-40, label="Healthy"), size=4) + geom_text(aes(x=numConflicts-70, y=960, label="Too docile"), size=4) + geom_text(aes(x=numConflicts-175, y=-40, label="(c) Mandatory Liposuction"), size=4)
+  
+  print(a)
+  
+  ##########################
+  # With nitpickiness
+  ##########################
+  
+#   cumulativeVector = buildCumulativeVector(conflictVector, numConflicts, threshold=thresholdParam, nitpick=TRUE)
+#   xIndices = seq(1, numConflicts+1, by=.5)
+#   df2 = data.frame(xIndices, cumulativeVector)
+#   colnames(df2) = c("Conflict", "Tension")
+#   
+#   
+#   a<- ggplot(df2, aes(x=Conflict, y=Tension)) + geom_point(data=df2[df2$Conflict<cutoff,]) + labs(title = paste("Relationship Tension w/ Nitpickiness for Negativity Threshold = ", toString(thresholdParam), sep=""), x="Conflict Number", y="Cumulative Relationship Tension") + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + scale_x_continuous(breaks=seq(0,numConflicts,100), limits=c(1,numConflicts+1)) + scale_y_continuous(breaks=seq(-1000,1000,200), limits=c(-1000,1000)) + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=-tensionLimit,ymax=tensionLimit), fill="green", alpha="0.3") + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=tensionLimit,ymax=1000), fill="red", alpha="0.3") + geom_ribbon(data=subset(df2, 0 <= df2$Conflict & df2$Conflict <= numConflicts+1), aes(ymin=-1000,ymax=-tensionLimit), fill="blue", alpha="0.3") + geom_text(aes(x=numConflicts-60, y=tensionLimit-60, label="Healthy"), size=4) + geom_text(aes(x=numConflicts-70, y=940, label="Too docile"), size=4) + geom_text(aes(x=numConflicts-80, y=-tensionLimit-60, label="Too nitpicky"), size=4) + geom_text(aes(x=numConflicts-175, y=-940, label="(c) Mandatory Liposuction"), size=4)
+#   
+#   print(a)
+}
+
+#function to iterate over the full span of x-values
+trace.animate <- function(conflictVector, numConflicts, thresholdParam, tensionLimit=250) {
+  lapply(seq(1, numConflicts+1, floor(numConflicts/200)), function(i) {
+    draw.curve(i, conflictVector, numConflicts, thresholdParam, tensionLimit)
+  })
+}
+
+trace.showAll <- function(conflictVector, numConflicts, thresholdParam, tensionLimit=250) {
+  for(i in -3:3){
+    thresh = maxGoodThreshold + i
+    plotCumulativeVector(intensities, numConflicts, thresh, tensionLimit)  
+  }
+}
+
+#save all iterations into individual GIFs
+ani.options(convert="C:/Program Files/ImageMagick-6.9.2-Q16/convert.exe")
+  for(i in -3:3){
+    thresh = maxGoodThreshold + i
+    saveGIF(trace.animate(intensities, numConflicts, thresh, tensionLimit), interval = .05, movie.name=paste("trace", toString(thresh), "_noNitpick.gif", sep=""))
+  }
+
+  # Cycle through all 7 graphs in their final form.
+    saveGIF(trace.showAll(intensities, numConflicts, thresh, tensionLimit), interval = 1, movie.name=paste("trace_no_nitpick_with_colors.gif", sep=""))
+
+```
